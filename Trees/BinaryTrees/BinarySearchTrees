@@ -1,0 +1,9 @@
+This directory contains the templates for unbalanced BST, Balanced BST(Red Black Tree), Rank Tree and Weighted BST.
+Weighted BST is the one which allows the insertion of duplicate elememts and also tells the element with a particular rank.
+For example, if the elements inserted are 1,1,6,4,4,2 and the client code asks the elemt with rank 3, then 2 will be returned.
+
+THe interface is Templated so the client code can make a variety of trees according to its own requirement such as 
+RB-RankTree, Unbalanced-RankTree, RB-Weighted Tree etc.
+
+The limitation with Weighted BST in this implemetation is that it assumes that the duplicate elements are identical.
+So it keeps the element and the count, not the individual elements with same key.
