@@ -9,6 +9,9 @@
 typedef unsigned long long UINT;
 #endif
 
+#define UINT64_MAX UINT_MAX
+
+
 #if !defined(INT)
 typedef long long INT;
 #endif
@@ -53,13 +56,17 @@ namespace trees
 			  UINT whichChildAmI()
 			  {
 				  MWayTreeNode* parent = getParent();
-				  UINT retVal = -1;
-				  if(NULL != parent)
+				  if (NULL != parent)
 				  {
-					  while(parent->getChild(++retVal) != this);
-				  }
+					  UINT retVal = 0;
 
-				  return retVal;
+					  while (parent->getChild(retVal) != this)
+						  retVal++;
+
+					  return retVal;
+				  }
+				  else
+					  throw std::runtime_error("Got no parent");
 			  }
 
 			  MWayTreeNode* getChild( UINT index )
@@ -87,9 +94,14 @@ namespace trees
 				  _parent = parent;
 			  }
 
-			  T& getInfo()
+			  const T& getInfo()
 			  {
 				  return _info;
+			  }
+
+			  void setInfo(const T& info)
+			  {
+				  _info = info;
 			  }
 		};
 	protected:
@@ -134,7 +146,7 @@ namespace trees
 		{
 			if(NULL == _root)
 				return;
-
+			rem
 			std::stack<MWayTreeNode* > stacks[2];
 			stacks[0].push(_root);
 			UINT currentIndex = 0;
@@ -166,21 +178,15 @@ namespace trees
 				currentIndex = nextIndex;
 			}
 		}
-
-		//virtual MWayTreeNode<T,numChildren>* insert(T info) = 0;
-
-		//virtual std::pair<MWayTreeNode<T,numChildren>*,bool> remove(T info) = 0;
 	};
-
-	/*template <class T >
-	class BSTNode : public MWayTreeNode<T,2>
-	{};*/
 
 	template <class T, class comp=std::less<T> >
 	class BST : public MWayTree<T,2>
 	{
-
 	protected:
+		
+
+	public:
 		enum
 		{
 			LEFT = 0,
@@ -194,9 +200,7 @@ namespace trees
 			BLACK = 1
 		} COLOUR;
 
-	public:
-
-		class BSTNode: public  MWayTree<T,2>::MWayTreeNode
+		class BSTNode : public  MWayTree<T,2>::MWayTreeNode
 		{
 		protected:
 			UINT _colour;
@@ -253,7 +257,31 @@ namespace trees
 			{
 				_numRepetitions = numRepetitions;
 			}
+
+			BSTNode* getLeftChild()
+			{
+				return (BSTNode*)getChild(LEFT);
+			}
+
+			BSTNode* getRightChild()
+			{
+				return (BSTNode*)getChild(RIGHT);
+			}
 		};
+
+		struct BSTNodeBalancer
+		{
+			virtual void balanceInsert(BST<T, comp>& bst, BSTNode* node) = 0;
+			virtual void balanceDelete(BST<T, comp>& bst, BSTNode* node) = 0;
+		};
+
+		BSTNodeBalancer* _balancer;
+		
+
+		BST(BSTNodeBalancer* balancer):
+			_balancer(balancer)
+		{
+		}
 
 		UINT getSize(BSTNode* node)
 		{
@@ -310,7 +338,7 @@ namespace trees
 
 		virtual void setChild(BSTNode* parentNode, BSTNode* childNode, UINT childNum)
 		{
-			if(parentNode)
+			if(NULL != parentNode)
 				parentNode->setChild(childNode,childNum);
 		}
 
@@ -381,7 +409,11 @@ namespace trees
 				retVal = true;
 			}
 
-			return std::pair<BSTNode*,bool>(retNode,retVal);
+			auto ret = std::pair<BSTNode*, bool>((NULL != retNode) ? retNode : findRes.first, retVal);
+			if (ret.second)
+				_balancer->balanceInsert(*this, ret.first);
+
+			return ret;
 		}
 
 		virtual void insert(BSTNode* parent, BSTNode* child)
@@ -396,7 +428,6 @@ namespace trees
 		{
 			BSTNode* rightChild = getChild(node,RIGHT);
 			BSTNode* parent = getParent(node);
-			UINT whichChildAmI = node->whichChildAmI();
 
 			if( NULL != rightChild)
 			{
@@ -404,7 +435,7 @@ namespace trees
 				setChild(rightChild,node, LEFT);
 				
 				if(NULL != parent)
-					setChild(parent,rightChild,whichChildAmI);
+					setChild(parent,rightChild, node->whichChildAmI());
 				else
 					setParent(rightChild,NULL);
 
@@ -417,7 +448,6 @@ namespace trees
 		{
 			BSTNode* leftChild = getChild(node,LEFT);
 			BSTNode* parent = getParent(node);
-			UINT whichChildAmI = node->whichChildAmI();
 
 			if( NULL != leftChild)
 			{
@@ -425,7 +455,7 @@ namespace trees
 				setChild(leftChild,node, RIGHT);
 
 				if(NULL != parent)
-					setChild(parent,leftChild,whichChildAmI);
+					setChild(parent,leftChild, node->whichChildAmI());
 				else
 					setParent(leftChild,NULL);
 
@@ -471,108 +501,208 @@ namespace trees
 		virtual BSTNode* getBSTNode(T info) = 0;
 		virtual void releaseNode(BSTNode* node) = 0;
 
+		BSTNode* getLeftMostChild(BSTNode* node)
+		{
+			while (NULL != getChild(node, LEFT))
+				node = getChild(node, LEFT);
+
+			return node;
+		}
+
 		BSTNode* getInOrderSuccessor(BSTNode* node)	
 		{
 			BSTNode* currNode = node;
-			if(NULL != currNode->getChild(RIGHT))
-				currNode = getChild(currNode,RIGHT);
-			else if(NULL != getParent(currNode))
+			if (NULL != getChild(currNode, RIGHT))
+				return getLeftMostChild(getChild(currNode, RIGHT));
+			else if (currNode->getParent() != NULL)
 			{
-				currNode = getParent(currNode);
-			}
-			else
-			{
-				currNode = NULL;
-			}
+				if (LEFT == node->whichChildAmI())
+					return (BSTNode*)currNode->getParent();
+				else
+				{
+					while (RIGHT == currNode->whichChildAmI())
+						currNode = (BSTNode*)currNode->getParent();
 
-
-			while( (NULL != currNode) && 
-				   (node != getChild(currNode,LEFT)) && 
-				   (NULL != getChild(currNode,LEFT))
-				  )
-			{
-				currNode = getChild(currNode,LEFT);
+					return (currNode != _root) ? (BSTNode*)currNode->getParent() : NULL;
+				}
 			}
-
-			return currNode;
 		}
 
-		virtual std::pair<BSTNode*,bool> remove(T info)
+
+		void transPlant(BSTNode* n1, BSTNode* n2)
 		{
-			bool exitLoop = false;
-			BSTNode* currNode = (BSTNode*)_root;
-			BSTNode* retNode = NULL;
-			bool retVal = true;
-			std::pair<BSTNode*,bool> findRes = find(info);
-			if(!findRes.second)
+			BSTNode* parent = getParent(n1);
+			if (NULL == parent)
 			{
-				retNode = NULL;
-				retVal = false;
+				_root = n2;
+			}
+			else
+				setChild(parent, n2, n1->whichChildAmI());
+		}
+
+		BSTNode* removeNodeWith2Children(BSTNode* node)
+		{
+			BSTNode* successor = getLeftMostChild(((BSTNode*)node)->getRightChild());
+			BSTNode* retNode = successor->getRightChild();
+			if (getParent(successor) != ((BSTNode*)node))
+			{
+				transPlant(successor, successor->getRightChild());
+				setChild(successor, ((BSTNode*)node)->getRightChild(), RIGHT);
+			}
+
+			transPlant((BSTNode*)node, successor);
+			setChild(successor, node->getLeftChild(), LEFT);
+
+			return retNode;
+		}
+
+		virtual BSTNode* remove(BSTNode* node)
+		{
+			BSTNode* retNode = NULL;
+			bool noChild = (0 == node->getNumChildren());
+			bool oneChild = (1 == node->getNumChildren());
+			bool botChildren = (2 == node->getNumChildren());
+
+			if (node == _root)
+			{
+				if (noChild)
+					_root = NULL;
+				else if (oneChild)
+					_root = (NULL != ((BSTNode*)_root)->getLeftChild()) ? ((BSTNode*)_root)->getLeftChild() : ((BSTNode*)_root)->getRightChild();
+				else
+					retNode = removeNodeWith2Children((BSTNode*)_root);
 			}
 			else
 			{
-				BSTNode* currNode = findRes.first;
-				BSTNode* parent = getParent(currNode);
-				BSTNode* retNode = NULL;
-				if( 0 == currNode->getNumChildren())//No children
+				BSTNode* parent = getParent(node);
+				if (noChild)
+					setChild(parent, NULL, node->whichChildAmI());
+				else if (oneChild)
 				{
-					if(NULL != parent)
-						(getChild(parent,LEFT) == currNode)? setChild(parent,NULL, LEFT) : setChild(parent,NULL, RIGHT);
+					BSTNode* onlyChild = (NULL != node->getLeftChild()) ?
+						node->getLeftChild() :
+						node->getRightChild();
 
-					releaseNode(currNode);
-					retNode = parent;
+					setChild(parent, onlyChild, node->whichChildAmI());
 
-					if(currNode == _root)
-						_root = NULL;
+					retNode = onlyChild;
 				}
-				else if(1 == currNode->getNumChildren())//1 child
-				{
-					BSTNode* onlyChild = (BSTNode*)((NULL != getChild(currNode,LEFT))? getChild(currNode,LEFT) : getChild(currNode,RIGHT));
-					if(NULL != parent)
-						(setChild(parent,onlyChild, (getChild(parent,LEFT) == onlyChild)?LEFT:RIGHT)) ;
-
-					releaseNode(currNode);
-					retNode = parent;
-
-					if(currNode == _root)
-						_root = onlyChild;
-				}
-				else//Node has 2 children
-				{
-					BSTNode* inOrderSuccessor = getInOrderSuccessor(currNode);
-					BSTNode* inOrderSuccessorParent = getParent(inOrderSuccessor);
-
-					if( inOrderSuccessor == getChild(inOrderSuccessorParent,LEFT))//Inorder successor's parent will never be NULL in this scenario
-						setChild(inOrderSuccessorParent,getChild(inOrderSuccessor,RIGHT), LEFT);
-					else
-						setChild(inOrderSuccessorParent,getChild(inOrderSuccessor,RIGHT), RIGHT);
-
-					setChild(inOrderSuccessor,getChild(currNode,LEFT),LEFT);
-
-					if( inOrderSuccessor != getChild(currNode,RIGHT) )
-						setChild(inOrderSuccessor,getChild(currNode,RIGHT), RIGHT);
-
-					if(NULL != parent)
-					{
-						setChild(parent,inOrderSuccessor, (getChild(parent,LEFT) == currNode)?LEFT:RIGHT);
-					}
-
-					releaseNode(currNode);
-					retNode = inOrderSuccessorParent;
-
-					if(currNode == _root)
-						_root = inOrderSuccessor;
-				}
-
-				exitLoop = true;
+				else
+					retNode = removeNodeWith2Children(node);
 			}
 
-			return std::pair<BSTNode*,bool>(retNode, retVal);
+			releaseNode(node);
+
+			if (NULL != _root)
+				setParent(_root, NULL);
+
+			return retNode;
+		}
+
+		virtual std::pair<BSTNode*, bool> remove(T info)
+		{
+			BSTNode* currNode = (BSTNode*)_root;
+			BSTNode* retNode = NULL;
+			std::pair<BSTNode*,bool> findRes = find(info);
+			std::pair<BSTNode*, bool> retVal;
+			if(!findRes.second)
+				retVal = std::pair<BSTNode*, bool>(NULL, false);
+			else
+				retVal = std::pair<BSTNode*, bool>(remove(findRes.first), true);
+
+			if (retVal.second)
+				_balancer->balanceDelete(*this, retVal.first);
+
+			return retVal;
+		}
+		//{
+		//	bool exitLoop = false;
+		//	BSTNode* currNode = (BSTNode*)_root;
+		//	BSTNode* retNode = NULL;
+		//	bool retVal = true;
+		//	std::pair<BSTNode*,bool> findRes = find(info);
+		//	if(!findRes.second)
+		//	{
+		//		retNode = NULL;
+		//		retVal = false;
+		//	}
+		//	else
+		//	{
+		//		BSTNode* currNode = findRes.first;
+		//		BSTNode* retNode = NULL;
+
+		//		while (!exitLoop)
+		//		{
+		//			BSTNode* parent = getParent(currNode);
+		//			if (0 == currNode->getNumChildren())//No children
+		//			{
+		//				if (NULL != parent)
+		//					setChild(parent, NULL, currNode->whichChildAmI());
+
+		//				releaseNode(currNode);
+		//				retNode = parent;
+
+		//				if (currNode == _root)
+		//					_root = NULL;
+
+		//				exitLoop = true;
+		//			}
+		//			else if (1 == currNode->getNumChildren())//1 child
+		//			{
+		//				BSTNode* onlyChild = (BSTNode*)((NULL != getChild(currNode, LEFT)) ? getChild(currNode, LEFT) : getChild(currNode, RIGHT));
+		//				if (NULL != parent)
+		//					setChild(parent, onlyChild, currNode->whichChildAmI());
+
+		//				releaseNode(currNode);
+		//				retNode = onlyChild;
+
+		//				if (currNode == _root)
+		//					_root = onlyChild;
+
+		//				exitLoop = true;
+		//			}
+		//			else//Node has 2 children
+		//			{
+		//				BSTNode* inOrderSuccessor = getInOrderSuccessor(currNode);
+		//				currNode->setInfo(inOrderSuccessor->getInfo());
+		//				currNode = inOrderSuccessor;
+		//			}
+		//		}
+
+		//		if(NULL != _root)
+		//			_root->setParent(NULL);
+		//	}
+
+		//	return std::pair<BSTNode*,bool>(retNode, retVal);
+		//}
+
+		BSTNode* getRoot()
+		{
+			return (BSTNode*)_root;
 		}
 
 	};
 
+	template <class T, class comp = std::less<T> >
+	class DefaultBST : public BST<T,comp>
+	{
+	public:
 
+		DefaultBST(BSTNodeBalancer* balancer):
+			BST<T, comp>(balancer)
+		{
+		}
+		virtual BSTNode* getBSTNode(T info)
+		{
+			return new BSTNode(info);
+		}
+
+
+		virtual void releaseNode(BSTNode* node)
+		{
+			delete node;
+		}
+	};
 }
 
 #endif

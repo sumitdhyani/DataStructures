@@ -42,19 +42,10 @@ namespace trees
 				setNumRepetitions(currNode, getNumRepetitions(currNode) + 1 );
 			}
 			else 
-			{
 				insertRes = Base::insert(info);
-				currNode = getGrandParent(insertRes.first);
-			}
-
-			while(NULL != currNode)
-			{
-				currNode->setWeight(currNode->getWeight() + 1);
-				currNode = getParent(currNode);
-			}
 
 			if(findRes.second)
-				return std::pair<BSTNode*,bool>(NULL, false);
+				return findRes;
 			else
 				return insertRes;
 		}
@@ -75,13 +66,9 @@ namespace trees
 				}
 
 				if(foundNode->getWeight() == 0)
-				{
 					return Base::remove(info);
-				}
 				else
-				{
 					return std::pair<BSTNode*,bool>(NULL,false);
-				}
 			}
 			else 
 				return std::pair<BSTNode*,bool>(NULL,false);
@@ -171,7 +158,7 @@ namespace trees
 
 		UINT getNodeRank(BSTNode* node)
 		{
-			UINT currRank = 0;
+			UINT currRank = 1;
 			BSTNode* currNode = (BSTNode*)_root;
 			BSTNode* retNode = NULL;
 			bool retVal = false;
@@ -181,6 +168,7 @@ namespace trees
 			{
 				if (currNode == NULL)
 				{
+					currRank = 0;
 					exitLoop = true;
 				}
 				else if (comp()(node->getInfo(), currNode->getInfo()))
@@ -190,7 +178,7 @@ namespace trees
 				}
 				else if (comp()(currNode->getInfo(), node->getInfo()))
 				{
-					currRank += getRankInMySubTree(currNode) + getNumRepetitions(currNode);
+					currRank += getRankInMySubTree(currNode) + getNumRepetitions(currNode) - 1;
 					retNode = currNode;
 					currNode = getChild(currNode, RIGHT);
 				}
